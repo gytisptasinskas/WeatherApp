@@ -7,8 +7,9 @@
 
 import UIKit
 import Alamofire
+import CoreLocation
 
-class WeatherViewController: UIViewController {
+class WeatherViewController: UIViewController, CLLocationManagerDelegate {
     @IBOutlet var backgroundColor: UIView!
     
     @IBOutlet weak var cityLabel: UILabel!
@@ -23,6 +24,8 @@ class WeatherViewController: UIViewController {
     let apiUrl:String = "https://weatherapi-com.p.rapidapi.com/current.json"
     let city: String = "New York"
     
+    let locationManager = CLLocationManager()
+    var currentLocation: CLLocation?
     var currentWeather: CurrentWeather?
     
     override func viewDidLoad() {
@@ -32,15 +35,35 @@ class WeatherViewController: UIViewController {
         loadWeatherData(for: city)
         setupKeyboardNotifications()
         UIStyling()
+        
+        locationManager.delegate = self
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
     }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.first {
+            currentLocation = location
+            locationManager.stopUpdatingLocation()
+            loadWeatherData(location: location)
+        }
+    }
+    
     
     @objc func dismissKeyboard() {
         view.endEditing(true)
     }
     
-    func loadWeatherData(for city: String){
+    func loadWeatherData(for city: String = "New York", location: CLLocation? = nil) {
         let headers: [String: String] = ["X-RapidAPI-Key": apiKey, "X-RapidAPI-Host": apiHost]
-        let params: [String: String] = ["q": city]
+        
+        var params: [String: String]
+        if let location = location {
+            params = ["q": "\(location.coordinate.latitude),\(location.coordinate.longitude)"]
+        } else {
+            params = ["q": city]
+        }
+        
         AF.request(apiUrl, method: .get, parameters: params, headers: HTTPHeaders(headers)).responseDecodable(of: CurrentWeather.self) { response in
             switch response.result {
             case .success(let value):
@@ -54,6 +77,7 @@ class WeatherViewController: UIViewController {
             }
         }
     }
+    
     
     func updateUIWithWeatherData() {
         if let weather = currentWeather {
@@ -73,7 +97,7 @@ class WeatherViewController: UIViewController {
             self.cityLabel.textColor = labelColor
             self.mainTempLabel.textColor = labelColor
             self.feelLikeLabel.textColor = labelColor
-
+            
             // Set background gradient for day or night
             if isDay {
                 gradientLayer.colors = [UIColor.white.cgColor, UIColor.systemCyan.cgColor]
@@ -87,11 +111,12 @@ class WeatherViewController: UIViewController {
             print("Background and label colors updated: \(isDay ? "Day" : "Night")")
         }
     }
-
+    
     
     @IBAction func confirmButtonTapped(_ sender: Any) {
         if let city = texfieldInput.text, !city.isEmpty {
             loadWeatherData(for: city)
+            texfieldInput.text = ""
         }
     }
     
@@ -118,7 +143,8 @@ class WeatherViewController: UIViewController {
     
     func UIStyling() {
         texfieldInput.layer.cornerRadius = 16.0
-
+        texfieldInput.placeholder = "Enter city here"
+        
         // Styling the button
         confirmButton.backgroundColor = UIColor.systemBlue
         confirmButton.tintColor = UIColor(.white)
